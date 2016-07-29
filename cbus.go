@@ -44,6 +44,32 @@ func (b *Bus) Listen(et EventType, l Listener) {
 	b.listeners[et] = append(b.listeners[et], l)
 }
 
+func (b *Bus) RemoveHandler(commandType string) Handler {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	handler := b.handlers[commandType]
+	delete(b.handlers, commandType)
+
+	return handler
+}
+
+func (b *Bus) RemoveListener(et EventType, l Listener) bool {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	i, found := 0, false
+	for i < len(b.listeners[et]) {
+		if b.listeners[et][i] == l {
+			b.listeners[et] = append(b.listeners[et][:i], b.listeners[et][i+1:]...)
+			found = true
+		} else {
+			i++
+		}
+	}
+	return found
+}
+
 func (b *Bus) Execute(command Command) (result interface{}, err error) {
 	return b.ExecuteContext(context.TODO(), command)
 }

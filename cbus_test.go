@@ -45,6 +45,96 @@ func TestBus_Listen(t *testing.T) {
 	}
 }
 
+func TestBus_RemoveHandler(t *testing.T) {
+	bus := New()
+
+	bus.Handle("handler", intHandler(1))
+
+	if handler := bus.RemoveHandler("does not exist"); handler != nil {
+		t.Fail()
+	}
+
+	handler := bus.RemoveHandler("handler")
+
+	if handler != intHandler(1) || len(bus.handlers) != 0 {
+		t.Fail()
+	}
+}
+
+func TestBus_RemoveListener(t *testing.T) {
+	tests := []struct {
+		eventType EventType
+		listeners []Listener
+
+		removeType EventType
+		toRemove   Listener
+
+		resultListeners []Listener
+		found           bool
+	}{
+		{
+			Before,
+			nil,
+			Before,
+			nil,
+			nil,
+			false,
+		},
+		{
+			Before,
+			[]Listener{intListener(1)},
+			Before,
+			intListener(1),
+			[]Listener{},
+			true,
+		},
+		{
+			Before,
+			[]Listener{intListener(1)},
+			Complete,
+			intListener(1),
+			[]Listener{intListener(1)},
+			false,
+		},
+		{
+			Before,
+			[]Listener{intListener(1), intListener(2)},
+			Before,
+			intListener(1),
+			[]Listener{intListener(2)},
+			true,
+		},
+		{
+			Before,
+			[]Listener{intListener(1), intListener(2)},
+			Before,
+			intListener(2),
+			[]Listener{intListener(1)},
+			true,
+		},
+	}
+	for index, test := range tests {
+		bus := New()
+		for _, listener := range test.listeners {
+			bus.Listen(test.eventType, listener)
+		}
+		found := bus.RemoveListener(test.removeType, test.toRemove)
+
+		if found != test.found || !reflect.DeepEqual(bus.listeners[test.eventType], test.resultListeners) {
+			t.Errorf(
+				"%v bus.RemoveListener(%v, %v) = %v, %v WANT %v, %v",
+				index,
+				test.removeType,
+				test.toRemove,
+				found,
+				bus.listeners[test.eventType],
+				test.found,
+				test.resultListeners,
+			)
+		}
+	}
+}
+
 func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T) {
 	bus := New()
 
