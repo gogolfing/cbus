@@ -20,12 +20,18 @@ func TestNew(t *testing.T) {
 func TestBus_Handle(t *testing.T) {
 	bus := New()
 
-	bus.Handle("1", intHandler(1))
+	prev := bus.Handle("1", intHandler(1))
+	if prev != nil {
+		t.Fail()
+	}
 	if bus.handlers["1"] != intHandler(1) {
 		t.Fail()
 	}
 
-	bus.Handle("1", intHandler(2))
+	prev = bus.Handle("1", intHandler(2))
+	if prev != intHandler(1) {
+		t.Fail()
+	}
 	if bus.handlers["1"] != intHandler(2) {
 		t.Fail()
 	}
@@ -146,6 +152,9 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 		if before || afterSuccess || complete {
 			t.Fail()
 		}
+		if event.Err != nil {
+			t.Fail()
+		}
 		before = true
 	}))
 
@@ -153,11 +162,17 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 		if !before || afterSuccess || complete {
 			t.Fail()
 		}
+		if event.Err != nil {
+			t.Fail()
+		}
 		afterSuccess = true
 	}))
 
 	bus.Listen(Complete, ListenerFunc(func(ctx context.Context, event Event) {
 		if !before || !afterSuccess || complete {
+			t.Fail()
+		}
+		if event.Err != nil {
 			t.Fail()
 		}
 		complete = true
@@ -192,11 +207,17 @@ func TestBus_Execute_afterErrorEventListenerIsCalledForError(t *testing.T) {
 		if afterError || complete {
 			t.Fail()
 		}
+		if event.Err == nil {
+			t.Fail()
+		}
 		afterError = true
 	}))
 
 	bus.Listen(Complete, ListenerFunc(func(ctx context.Context, event Event) {
 		if !afterError || complete {
+			t.Fail()
+		}
+		if event.Err == nil {
 			t.Fail()
 		}
 		complete = true
