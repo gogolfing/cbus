@@ -1,0 +1,20 @@
+language: go
+
+go:
+  - 1.5.1
+
+notifications:
+  email:
+    recipients:
+        - eric.elsken@gmail.com
+    on_success: change
+    on_failure: change
+
+install:
+  - ./bin/travis/install.sh
+
+script:
+  - ./bin/travis/test_coverage.sh
+
+after_success:
+  - ./bin/coveralls/push.sh
