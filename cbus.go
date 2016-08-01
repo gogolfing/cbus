@@ -166,17 +166,17 @@ func (b *Bus) execute(ctx context.Context, command Command, handler Handler) (in
 	done := make(chan *executePayload)
 
 	go func() {
-		b.dispatchEvent(ctx, Before, command, nil)
+		b.dispatchEvent(ctx, Before, command, nil, nil)
 
 		result, err := handler.Handle(ctx, command)
 
 		if err == nil {
-			b.dispatchEvent(ctx, AfterSuccess, command, err)
+			b.dispatchEvent(ctx, AfterSuccess, command, result, err)
 		} else {
-			b.dispatchEvent(ctx, AfterError, command, err)
+			b.dispatchEvent(ctx, AfterError, command, result, err)
 		}
 
-		b.dispatchEvent(ctx, Complete, command, err)
+		b.dispatchEvent(ctx, Complete, command, result, err)
 
 		done <- &executePayload{result, err}
 	}()
@@ -191,12 +191,13 @@ func (b *Bus) execute(ctx context.Context, command Command, handler Handler) (in
 	return payload.result, payload.err
 }
 
-func (b *Bus) dispatchEvent(ctx context.Context, et EventType, command Command, err error) {
+func (b *Bus) dispatchEvent(ctx context.Context, et EventType, command Command, result interface{}, err error) {
 	listeners := b.listeners[et]
 
 	for _, listener := range listeners {
 		listener.OnEvent(ctx, Event{
 			EventType: et,
+			Result:    result,
 			Err:       err,
 			Command:   command,
 		})
@@ -260,6 +261,12 @@ type Event struct {
 	//EventType is the type of the Event. This will designate what part of the
 	//lifecycle a Command is in.
 	EventType
+
+	//Result is the possible result of that occurred during a Command Handler's execution.
+	//Result will be nil on Before and AfterError Events.
+	//It will be the result value that occurred for AfterSuccess and Complete Events
+	//if there was a result.
+	Result interface{}
 
 	//Err is the possible error that occurred during a Command Handler's execution.
 	//Err will be nil on Before and AfterSuccess Events.

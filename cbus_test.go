@@ -152,6 +152,9 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 		if before || afterSuccess || complete {
 			t.Fail()
 		}
+		if event.Result != nil {
+			t.Fail()
+		}
 		if event.Err != nil {
 			t.Fail()
 		}
@@ -162,6 +165,9 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 		if !before || afterSuccess || complete {
 			t.Fail()
 		}
+		if event.Result != "this is the result" {
+			t.Fail()
+		}
 		if event.Err != nil {
 			t.Fail()
 		}
@@ -170,6 +176,9 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 
 	bus.Listen(Complete, ListenerFunc(func(ctx context.Context, event Event) {
 		if !before || !afterSuccess || complete {
+			t.Fail()
+		}
+		if event.Result != "this is the result" {
 			t.Fail()
 		}
 		if event.Err != nil {
@@ -207,6 +216,9 @@ func TestBus_Execute_afterErrorEventListenerIsCalledForError(t *testing.T) {
 		if afterError || complete {
 			t.Fail()
 		}
+		if event.Result != nil {
+			t.Fail()
+		}
 		if event.Err == nil {
 			t.Fail()
 		}
@@ -215,6 +227,9 @@ func TestBus_Execute_afterErrorEventListenerIsCalledForError(t *testing.T) {
 
 	bus.Listen(Complete, ListenerFunc(func(ctx context.Context, event Event) {
 		if !afterError || complete {
+			t.Fail()
+		}
+		if event.Result != nil {
 			t.Fail()
 		}
 		if event.Err == nil {
