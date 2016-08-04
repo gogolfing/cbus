@@ -45,6 +45,18 @@ import (
 //does not exist for a command's Type.
 var ErrHandlerNotFound = errors.New("cbus: handler not found")
 
+//ErrExecutePanic is an error that occurs if the executing goroutine for
+//a Command's Event Listeners or Handler panics.
+type ErrExecutePanic struct {
+	//Panic is the value returned from recover() if not nil.
+	Panic interface{}
+}
+
+//Error is the error implementation for e.
+func (e *ErrExecutePanic) Error() string {
+	return "cbus: panic while executing command"
+}
+
 //Bus is the Command Bus implementation.
 //A Bus contains a one to one mapping from Command types to Handlers.
 //It additionally contains Listeners that are called during specific steps during
@@ -166,6 +178,12 @@ func (b *Bus) execute(ctx context.Context, command Command, handler Handler) (in
 	done := make(chan *executePayload)
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- &executePayload{nil, &ErrExecutePanic{r}}
+			}
+		}()
+
 		b.dispatchEvent(ctx, Before, command, nil, nil)
 
 		result, err := handler.Handle(ctx, command)

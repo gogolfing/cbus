@@ -268,6 +268,25 @@ func TestBus_Execute_errorHandlerNotFound(t *testing.T) {
 	}
 }
 
+func TestBus_Execute_panicError(t *testing.T) {
+	bus := New()
+
+	command := intCommand(1)
+
+	bus.Handle("1", HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
+		panic("panic value")
+	}))
+
+	result, err := bus.Execute(command)
+
+	if result != nil {
+		t.Fail()
+	}
+	if eep := err.(*ErrExecutePanic); eep.Panic != "panic value" {
+		t.Fail()
+	}
+}
+
 func TestBus_ExecuteContext_errorsWithCancelledContext(t *testing.T) {
 	bus := New()
 
@@ -302,4 +321,10 @@ type intCommand int
 
 func (ic intCommand) Type() string {
 	return fmt.Sprintf("%v", int(ic))
+}
+
+type panicHandler string
+
+func (pc panicHandler) Type() string {
+	return "panic"
 }
