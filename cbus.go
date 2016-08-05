@@ -33,6 +33,9 @@
 //
 //		fmt.Println(result.(*User).Name) //Mr. Foo Bar
 //	}
+//
+//This package requires Go version 1.7 or higher because it uses the newly added
+//context package.
 package cbus
 
 import (
