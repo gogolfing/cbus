@@ -8,6 +8,7 @@ context package.
 #### Status
 [![Build Status](https://travis-ci.org/gogolfing/cbus.svg?branch=master)](https://travis-ci.org/gogolfing/cbus)
 [![Coverage Status](https://coveralls.io/repos/github/gogolfing/cbus/badge.svg?branch=master)](https://coveralls.io/github/gogolfing/cbus?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gogolfing/cbus)](https://goreportcard.com/report/github.com/gogolfing/cbus)
 
 ### Documentation and Usage
 Full documentation and examples can be found at [![GoDoc](https://godoc.org/github.com/gogolfing/cbus?status.svg)](https://godoc.org/github.com/gogolfing/cbus)
