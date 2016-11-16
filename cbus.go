@@ -40,17 +40,25 @@ package cbus
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 )
 
-//ErrHandlerNotFound is the value returned from Bus.Execute*() if a Handler
-//does not exist for a command's Type.
-var ErrHandlerNotFound = errors.New("cbus: handler not found")
-
-type ErrHanderNotFound struct {
+//ErrHandlerNotFound occurs when a Handler has not been registered for a Command's type.
+type ErrHandlerNotFound struct {
 	Command
+}
+
+//Error is the error implementation for ErrHandlerNotFound.
+func (e *ErrHandlerNotFound) Error() string {
+	return fmt.Sprintf("cbus: Handler not found for Command type %T", e.Command)
+}
+
+//IsErrHandlerNotFound determines whether or not err is of type ErrHandlerNotFound.
+func IsErrHandlerNotFound(err error) bool {
+	_, ok := err.(*ErrHandlerNotFound)
+	return ok
 }
 
 //ErrExecutePanic is an error that occurs if the executing goroutine for
@@ -182,7 +190,7 @@ func (b *Bus) ExecuteContext(ctx context.Context, command Command) (result inter
 
 	handler, ok := b.handlers[reflect.TypeOf(command)]
 	if !ok {
-		return nil, ErrHandlerNotFound
+		return nil, &ErrHandlerNotFound{command}
 	}
 
 	return b.execute(ctx, command, handler)
