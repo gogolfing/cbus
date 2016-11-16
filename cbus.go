@@ -16,7 +16,7 @@
 //	}
 //
 //	func main() {
-//		bus := New()
+//		bus := &Bus{}
 //
 //		bus.Handle("CreateUser", HandlerFunc(func(ctx context.Context, command Command) (interface{}, error) {
 //			user := &User{
@@ -81,7 +81,8 @@ func (e *ErrExecutePanic) Error() string {
 //or errored results from the Handler.
 //All registered Listeners are called in the order they were added via Listen().
 //
-//Bus is safe for use by multiple goroutines.
+//The zero value for Bus is fully functional.
+//Type Bus is safe for use by multiple goroutines.
 type Bus struct {
 	//lock protects all other fields in Bus.
 	lock      sync.RWMutex
