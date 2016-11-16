@@ -41,12 +41,17 @@ package cbus
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 )
 
-//ErrHandlerNotFound is the value returned from *Bus.Execute*() if a Handler
+//ErrHandlerNotFound is the value returned from Bus.Execute*() if a Handler
 //does not exist for a command's Type.
 var ErrHandlerNotFound = errors.New("cbus: handler not found")
+
+type ErrHanderNotFound struct {
+	Command
+}
 
 //ErrExecutePanic is an error that occurs if the executing goroutine for
 //a Command's Event Listeners or Handler panics.
@@ -62,6 +67,7 @@ func (e *ErrExecutePanic) Error() string {
 
 //Bus is the Command Bus implementation.
 //A Bus contains a one to one mapping from Command types to Handlers.
+//The reflect.TypeOf interface is used as keys to map from Commands to Handlers.
 //It additionally contains Listeners that are called during specific steps during
 //a Command's execution.
 //
@@ -78,33 +84,29 @@ func (e *ErrExecutePanic) Error() string {
 //Bus is safe for use by multiple goroutines.
 type Bus struct {
 	//lock protects all other fields in Bus.
-	lock      *sync.RWMutex
-	handlers  map[string]Handler
+	lock      sync.RWMutex
+	handlers  map[reflect.Type]Handler
 	listeners map[EventType][]Listener
 }
 
-//New creates a new Bus with no Handlers or Listeners.
-func New() *Bus {
-	return &Bus{
-		lock:      &sync.RWMutex{},
-		handlers:  map[string]Handler{},
-		listeners: map[EventType][]Listener{},
-	}
-}
-
-//Handle adds a Handler to b that will be called when a Command whose Type()
-//equals commandType is executed on b.
+//Handle associates a Handler in b that will be called when a Command whose type
+//equals command's type.
 //Only one Handler is allowed per Command type. Any previously added Handlers
 //with the same commandType will be overwritten.
 //prev is the Handler previously associated with commandType if it exists.
-func (b *Bus) Handle(commandType string, handler Handler) (prev Handler) {
+func (b *Bus) Handle(command Command, handler Handler) (prev Handler) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	prev = b.handlers[commandType]
+	return b.putHandler(reflect.TypeOf(command), handler)
+}
 
+func (b *Bus) putHandler(commandType reflect.Type, handler Handler) Handler {
+	prev := b.handlers[commandType]
+	if b.handlers == nil {
+		b.handlers = map[reflect.Type]Handler{}
+	}
 	b.handlers[commandType] = handler
-
 	return prev
 }
 
@@ -115,6 +117,13 @@ func (b *Bus) Listen(et EventType, l Listener) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	b.appendListener(et, l)
+}
+
+func (b *Bus) appendListener(et EventType, l Listener) {
+	if b.listeners == nil {
+		b.listeners = map[EventType][]Listener{}
+	}
 	_, ok := b.listeners[et]
 	if !ok {
 		b.listeners[et] = []Listener{}
@@ -122,12 +131,13 @@ func (b *Bus) Listen(et EventType, l Listener) {
 	b.listeners[et] = append(b.listeners[et], l)
 }
 
-//RemoveHandler removes the Handler associated with commandType and returns it.
-//This is a no-op and returns nil if a Handler does not exist for commandType.
-func (b *Bus) RemoveHandler(commandType string) Handler {
+//RemoveHandler removes the Handler associated with Command's type and returns it.
+//This is a no-op and returns nil if a Handler does not exist for command.
+func (b *Bus) RemoveHandler(command Command) Handler {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	commandType := reflect.TypeOf(command)
 	handler := b.handlers[commandType]
 	delete(b.handlers, commandType)
 
@@ -169,7 +179,7 @@ func (b *Bus) ExecuteContext(ctx context.Context, command Command) (result inter
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	handler, ok := b.handlers[command.Type()]
+	handler, ok := b.handlers[reflect.TypeOf(command)]
 	if !ok {
 		return nil, ErrHandlerNotFound
 	}
@@ -231,7 +241,7 @@ type executePayload struct {
 }
 
 //Handler defines the contract for executing a Command within a context.Context.
-//The result and err return parameters will be returned from *Bus.Execute*() calls
+//The result and err return parameters will be returned from Bus.Execute*() calls
 //which allows Command executors to know the results of the Command's execution.
 type Handler interface {
 	Handle(ctx context.Context, command Command) (result interface{}, err error)
@@ -245,14 +255,12 @@ func (hf HandlerFunc) Handle(ctx context.Context, command Command) (result inter
 	return hf(ctx, command)
 }
 
-//Command provides an interface for executing arbitrary values on a *Bus.
-//A Command need only provide a type string that determines which Handler gets called
-//during Command execution.
+//Command is an empty interface that anything can implement and allows for
+//executing arbitrary values on a Bus.
+//Therefore, a Command is any defined type that get associated with Handler.
 //The specific implementation of a Command can then carry the payload for the command
 //to execute.
-type Command interface {
-	Type() string
-}
+type Command interface{}
 
 //EventType is an enumeration of types of events that occur in a Command's execution
 //lifecycle.

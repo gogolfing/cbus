@@ -9,22 +9,14 @@ import (
 	"time"
 )
 
-func TestNew(t *testing.T) {
-	bus := New()
-
-	if bus == nil || bus.lock == nil || bus.handlers == nil || bus.listeners == nil {
-		t.Fail()
-	}
-}
-
 func TestBus_Handle(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	prev := bus.Handle("1", intHandler(1))
 	if prev != nil {
 		t.Fail()
 	}
-	if bus.handlers["1"] != intHandler(1) {
+	if bus.handlers[reflect.TypeOf("1")] != intHandler(1) {
 		t.Fail()
 	}
 
@@ -32,13 +24,13 @@ func TestBus_Handle(t *testing.T) {
 	if prev != intHandler(1) {
 		t.Fail()
 	}
-	if bus.handlers["1"] != intHandler(2) {
+	if bus.handlers[reflect.TypeOf("1")] != intHandler(2) {
 		t.Fail()
 	}
 }
 
 func TestBus_Listen(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	bus.Listen(Before, intListener(1))
 	if !reflect.DeepEqual(bus.listeners[Before], []Listener{intListener(1)}) {
@@ -52,11 +44,11 @@ func TestBus_Listen(t *testing.T) {
 }
 
 func TestBus_RemoveHandler(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	bus.Handle("handler", intHandler(1))
 
-	if handler := bus.RemoveHandler("does not exist"); handler != nil {
+	if handler := bus.RemoveHandler(struct{}{}); handler != nil {
 		t.Fail()
 	}
 
@@ -120,7 +112,7 @@ func TestBus_RemoveListener(t *testing.T) {
 		},
 	}
 	for index, test := range tests {
-		bus := New()
+		bus := &Bus{}
 		for _, listener := range test.listeners {
 			bus.Listen(test.eventType, listener)
 		}
@@ -142,7 +134,7 @@ func TestBus_RemoveListener(t *testing.T) {
 }
 
 func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	command := intCommand(1)
 
@@ -187,7 +179,7 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 		complete = true
 	}))
 
-	bus.Handle("1", HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
+	bus.Handle(command, HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
 		if cmd != command {
 			t.Fail()
 		}
@@ -206,7 +198,7 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 }
 
 func TestBus_Execute_afterErrorEventListenerIsCalledForError(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	command := intCommand(1)
 
@@ -238,7 +230,7 @@ func TestBus_Execute_afterErrorEventListenerIsCalledForError(t *testing.T) {
 		complete = true
 	}))
 
-	bus.Handle("1", HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
+	bus.Handle(command, HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
 		if cmd != command {
 			t.Fail()
 		}
@@ -257,7 +249,7 @@ func TestBus_Execute_afterErrorEventListenerIsCalledForError(t *testing.T) {
 }
 
 func TestBus_Execute_errorHandlerNotFound(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	command := intCommand(1)
 
@@ -269,11 +261,11 @@ func TestBus_Execute_errorHandlerNotFound(t *testing.T) {
 }
 
 func TestBus_Execute_panicError(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	command := intCommand(1)
 
-	bus.Handle("1", HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
+	bus.Handle(command, HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
 		panic("panic value")
 	}))
 
@@ -288,11 +280,11 @@ func TestBus_Execute_panicError(t *testing.T) {
 }
 
 func TestBus_ExecuteContext_errorsWithCancelledContext(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
 	command := intCommand(1)
 
-	bus.Handle("1", HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
+	bus.Handle(command, HandlerFunc(func(ctx context.Context, cmd Command) (interface{}, error) {
 		return "something we wont get later", nil
 	}))
 

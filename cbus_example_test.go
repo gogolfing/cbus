@@ -14,14 +14,10 @@ type CreateUserCommand struct {
 	Name string
 }
 
-func (cuc *CreateUserCommand) Type() string {
-	return "CreateUser"
-}
-
 func Test(t *testing.T) {
-	bus := New()
+	bus := &Bus{}
 
-	bus.Handle("CreateUser", HandlerFunc(func(ctx context.Context, command Command) (interface{}, error) {
+	bus.Handle(&CreateUserCommand{}, HandlerFunc(func(ctx context.Context, command Command) (interface{}, error) {
 		cuc := command.(*CreateUserCommand)
 
 		user := &User{
