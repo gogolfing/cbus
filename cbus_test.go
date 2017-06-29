@@ -9,26 +9,6 @@ import (
 	"time"
 )
 
-func TestErrHandlerNotFound_Error(t *testing.T) {
-	command := intCommand(1)
-	err := &ErrHandlerNotFound{command}
-
-	if err.Error() != "cbus: Handler not found for Command type cbus.intCommand" {
-		t.Fatal()
-	}
-}
-
-func TestIsErrHandlerNotFound(t *testing.T) {
-	err := fmt.Errorf("error")
-	if IsErrHandlerNotFound(err) {
-		t.Fatal()
-	}
-	err = &ErrHandlerNotFound{"error"}
-	if !IsErrHandlerNotFound(err) {
-		t.Fatal()
-	}
-}
-
 func TestBus_Handle(t *testing.T) {
 	bus := &Bus{}
 
@@ -275,7 +255,7 @@ func TestBus_Execute_errorHandlerNotFound(t *testing.T) {
 
 	result, err := bus.Execute(command)
 
-	if result != nil || !IsErrHandlerNotFound(err) {
+	if result != nil || !IsHandlerNotFoundError(err) {
 		t.Fail()
 	}
 }
@@ -294,7 +274,7 @@ func TestBus_Execute_panicError(t *testing.T) {
 	if result != nil {
 		t.Fail()
 	}
-	if eep := err.(*ErrExecutePanic); eep.Panic != "panic value" {
+	if eep := err.(*ExecutionPanicError); eep.Panic != "panic value" {
 		t.Fail()
 	}
 }

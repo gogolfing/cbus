@@ -18,7 +18,7 @@
 //	func main() {
 //		bus := &Bus{}
 //
-//		bus.Handle("CreateUser", HandlerFunc(func(ctx context.Context, command Command) (interface{}, error) {
+//		bus.Handle(&CreateUserCommand{}, HandlerFunc(func(ctx context.Context, command Command) (interface{}, error) {
 //			user := &User{
 //				Name: command.(*CreateUserCommand).Name,
 //			}
@@ -34,43 +34,35 @@
 //		fmt.Println(result.(*User).Name) //Mr. Foo Bar
 //	}
 //
-//This package requires Go version 1.7 or higher because it uses the newly added
-//context package.
+//This package requires Go version 1.7 or higher because it uses the context package.
 package cbus
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"sync"
 )
 
-//ErrHandlerNotFound occurs when a Handler has not been registered for a Command's type.
-type ErrHandlerNotFound struct {
-	Command
+//Command is an empty interface that anything can implement and allows for
+//executing arbitrary values on a Bus.
+//Therefore, a Command is any defined type that get associated with Handler.
+//The specific implementation of a Command can then carry the payload for the command
+//to execute.
+type Command interface{}
+
+//Handler defines the contract for executing a Command within a context.Context.
+//The result and err return parameters will be returned from Bus.Execute*() calls
+//which allows Command executors to know the results of the Command's execution.
+type Handler interface {
+	Handle(ctx context.Context, command Command) (result interface{}, err error)
 }
 
-//Error is the error implementation for ErrHandlerNotFound.
-func (e *ErrHandlerNotFound) Error() string {
-	return fmt.Sprintf("cbus: Handler not found for Command type %T", e.Command)
-}
+//HandlerFunc is a function definition for a Handler.
+type HandlerFunc func(ctx context.Context, command Command) (result interface{}, err error)
 
-//IsErrHandlerNotFound determines whether or not err is of type ErrHandlerNotFound.
-func IsErrHandlerNotFound(err error) bool {
-	_, ok := err.(*ErrHandlerNotFound)
-	return ok
-}
-
-//ErrExecutePanic is an error that occurs if the executing goroutine for
-//a Command's Event Listeners or Handler panics.
-type ErrExecutePanic struct {
-	//Panic is the value returned from recover() if not nil.
-	Panic interface{}
-}
-
-//Error is the error implementation for e.
-func (e *ErrExecutePanic) Error() string {
-	return "cbus: panic while executing command"
+//Handle calls hf with ctx and command.
+func (hf HandlerFunc) Handle(ctx context.Context, command Command) (result interface{}, err error) {
+	return hf(ctx, command)
 }
 
 //Bus is the Command Bus implementation.
@@ -171,9 +163,9 @@ func (b *Bus) RemoveListener(et EventType, l Listener) bool {
 	return found
 }
 
-//Execute is sugar for b.ExecuteContext(context.TODO(), command).
+//Execute is sugar for b.ExecuteContext(context.Background(), command).
 func (b *Bus) Execute(command Command) (result interface{}, err error) {
-	return b.ExecuteContext(context.TODO(), command)
+	return b.ExecuteContext(context.Background(), command)
 }
 
 //ExecuteContext attempts to find a Handler for command's Type().
@@ -190,7 +182,7 @@ func (b *Bus) ExecuteContext(ctx context.Context, command Command) (result inter
 
 	handler, ok := b.handlers[reflect.TypeOf(command)]
 	if !ok {
-		return nil, &ErrHandlerNotFound{command}
+		return nil, &HandlerNotFoundError{command}
 	}
 
 	return b.execute(ctx, command, handler)
@@ -202,7 +194,7 @@ func (b *Bus) execute(ctx context.Context, command Command, handler Handler) (in
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				done <- &executePayload{nil, &ErrExecutePanic{r}}
+				done <- &executePayload{nil, &ExecutionPanicError{r}}
 			}
 		}()
 
@@ -247,84 +239,4 @@ func (b *Bus) dispatchEvent(ctx context.Context, et EventType, command Command, 
 type executePayload struct {
 	result interface{}
 	err    error
-}
-
-//Handler defines the contract for executing a Command within a context.Context.
-//The result and err return parameters will be returned from Bus.Execute*() calls
-//which allows Command executors to know the results of the Command's execution.
-type Handler interface {
-	Handle(ctx context.Context, command Command) (result interface{}, err error)
-}
-
-//HandlerFunc is a function definition for a Handler.
-type HandlerFunc func(ctx context.Context, command Command) (result interface{}, err error)
-
-//Handle calls hf with ctx and command.
-func (hf HandlerFunc) Handle(ctx context.Context, command Command) (result interface{}, err error) {
-	return hf(ctx, command)
-}
-
-//Command is an empty interface that anything can implement and allows for
-//executing arbitrary values on a Bus.
-//Therefore, a Command is any defined type that get associated with Handler.
-//The specific implementation of a Command can then carry the payload for the command
-//to execute.
-type Command interface{}
-
-//EventType is an enumeration of types of events that occur in a Command's execution
-//lifecycle.
-type EventType string
-
-const (
-	//Before denotes Events that are called after a Handler has been found for a
-	//Command but before the Command's Handler is called.
-	Before EventType = "Before"
-
-	//AfterSuccess denotes Events that are called after a Command's Handler has
-	//returned with a nil error.
-	AfterSuccess = "AfterSuccess"
-
-	//AfterError denotes Events that are called after a Command's Handler has
-	//returned with a non-nil error.
-	AfterError = "AfterError"
-
-	//Complete denotes Events that are called after a Command's Handler has
-	//returned regardless of successful or error completion.
-	//The Complete Event is called after all prior After* Events have completed.
-	Complete = "Complete"
-)
-
-//Event is the type that is emitted during a Command's lifecycle.
-type Event struct {
-	//EventType is the type of the Event. This will designate what part of the
-	//lifecycle a Command is in.
-	EventType
-
-	//Result is the possible result of that occurred during a Command Handler's execution.
-	//Result will be nil on Before and AfterError Events.
-	//It will be the result value that occurred for AfterSuccess and Complete Events
-	//if there was a result.
-	Result interface{}
-
-	//Err is the possible error that occurred during a Command Handler's execution.
-	//Err will be nil on Before and AfterSuccess Events.
-	//It will be the error that occurred for AfterError and Complete Events if there
-	//was an error.
-	Err error
-
-	//Command is the Command that is executing or has completed execution.
-	Command
-}
-
-//Listener defines the contract for responding to an Event during a Command's lifecycle.
-type Listener interface {
-	OnEvent(ctx context.Context, event Event)
-}
-
-//ListenerFunc if a function implementation of a Listener.
-type ListenerFunc func(ctx context.Context, event Event)
-
-//OnEvent calls lf with ctx and event.
-func (lf ListenerFunc) OnEvent(ctx context.Context, event Event) {
-	lf(ctx, event)
 }
