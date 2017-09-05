@@ -162,7 +162,7 @@ func TestBus_Execute_allEventsGetCalledAndReturnResultIsFromHandler(t *testing.T
 
 	before, afterSuccess, complete := false, false, false
 
-	bus.Listen(Before, ListenerFunc(func(ctx context.Context, event Event) {
+	bus.ListenCommand(Before, command, ListenerFunc(func(ctx context.Context, event Event) {
 		if before || afterSuccess || complete {
 			t.Fail()
 		}

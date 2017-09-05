@@ -24,3 +24,13 @@ func TestIsHandlerNotFoundError(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestExecutionPanicError_Error(t *testing.T) {
+	err := &ExecutionPanicError{
+		Panic: 1,
+	}
+
+	if err.Error() != "cbus: panic while executing command 1" {
+		t.Fatal(err.Error())
+	}
+}
