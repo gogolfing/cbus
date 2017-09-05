@@ -1,6 +1,9 @@
 package cbus
 
-import "context"
+import (
+	"context"
+	"reflect"
+)
 
 //EventType is an enumeration of types of events that occur in a Command's execution
 //lifecycle.
@@ -58,4 +61,19 @@ type ListenerFunc func(ctx context.Context, event Event)
 //OnEvent calls lf with ctx and event.
 func (lf ListenerFunc) OnEvent(ctx context.Context, event Event) {
 	lf(ctx, event)
+}
+
+type commandListener struct {
+	Command
+	lis Listener
+}
+
+func (cl *commandListener) onEvent(ctx context.Context, event Event) {
+	if cl.Command == nil {
+		cl.lis.OnEvent(ctx, event)
+	}
+
+	if reflect.TypeOf(cl.Command) == reflect.TypeOf(event.Command) {
+		cl.lis.OnEvent(ctx, event)
+	}
 }

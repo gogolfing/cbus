@@ -33,13 +33,23 @@ func TestBus_Listen(t *testing.T) {
 	bus := &Bus{}
 
 	bus.Listen(Before, intListener(1))
-	if !reflect.DeepEqual(bus.listeners[Before], []Listener{intListener(1)}) {
+	if !reflect.DeepEqual(externListeners(bus.listeners[Before]), []Listener{intListener(1)}) {
 		t.Fail()
 	}
 
 	bus.Listen(Before, intListener(2))
-	if !reflect.DeepEqual(bus.listeners[Before], []Listener{intListener(1), intListener(2)}) {
+	if !reflect.DeepEqual(externListeners(bus.listeners[Before]), []Listener{intListener(1), intListener(2)}) {
 		t.Fail()
+	}
+}
+
+func TestBus_ListenCommand(t *testing.T) {
+	bus := &Bus{}
+
+	bus.ListenCommand(Complete, intCommand(4), intListener(8))
+
+	if cls := bus.listeners[Complete]; len(cls) != 1 || cls[0].lis != intListener(8) || cls[0].Command != intCommand(4) {
+		t.Fatal()
 	}
 }
 
@@ -75,7 +85,7 @@ func TestBus_RemoveListener(t *testing.T) {
 			nil,
 			Before,
 			nil,
-			nil,
+			[]Listener{},
 			false,
 		},
 		{
@@ -118,7 +128,7 @@ func TestBus_RemoveListener(t *testing.T) {
 		}
 		found := bus.RemoveListener(test.removeType, test.toRemove)
 
-		if found != test.found || !reflect.DeepEqual(bus.listeners[test.eventType], test.resultListeners) {
+		if found != test.found || !reflect.DeepEqual(externListeners(bus.listeners[test.eventType]), test.resultListeners) {
 			t.Errorf(
 				"%v bus.RemoveListener(%v, %v) = %v, %v WANT %v, %v",
 				index,
@@ -130,6 +140,18 @@ func TestBus_RemoveListener(t *testing.T) {
 				test.resultListeners,
 			)
 		}
+	}
+}
+
+func TestBus_RemoveListenerCommand(t *testing.T) {
+	bus := &Bus{}
+
+	bus.ListenCommand(Before, intCommand(1), intListener(2))
+
+	listeners := bus.RemoveListenerCommand(Before, intCommand(1))
+
+	if len(listeners) != 1 || listeners[0] != intListener(2) {
+		t.Fatal()
 	}
 }
 
@@ -296,6 +318,14 @@ func TestBus_ExecuteContext_errorsWithCancelledContext(t *testing.T) {
 	if result != nil || err != context.DeadlineExceeded {
 		t.Fail()
 	}
+}
+
+func externListeners(cls []*commandListener) []Listener {
+	result := []Listener{}
+	for _, cl := range cls {
+		result = append(result, cl.lis)
+	}
+	return result
 }
 
 type intHandler int

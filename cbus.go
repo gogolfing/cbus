@@ -87,7 +87,7 @@ type Bus struct {
 	//lock protects all other fields in Bus.
 	lock      sync.RWMutex
 	handlers  map[reflect.Type]Handler
-	listeners map[EventType][]Listener
+	listeners map[EventType][]*commandListener
 }
 
 //Handle associates a Handler in b that will be called when a Command whose type
@@ -111,25 +111,40 @@ func (b *Bus) putHandler(commandType reflect.Type, handler Handler) Handler {
 	return prev
 }
 
-//Listen registers a Listener to be called for all Commands at the time in the
-//command lifecycle denoted by et.
+//Listen registers lis to be called for all Commands at the time in the
+//Command lifecycle denoted by et.
 //A value for et that is not documented in this package will never be called.
-func (b *Bus) Listen(et EventType, l Listener) {
+func (b *Bus) Listen(et EventType, lis Listener) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.appendListener(et, l)
+	b.appendListener(et, nil, lis)
 }
 
-func (b *Bus) appendListener(et EventType, l Listener) {
+//ListenCommand registers lis to be called for Commands of the same type as command
+//at the time in the Command lifecycle denoted by et.
+//A value for et that is not documented in this package will never be called.
+func (b *Bus) ListenCommand(et EventType, command Command, lis Listener) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.appendListener(et, command, lis)
+}
+
+func (b *Bus) appendListener(et EventType, command Command, lis Listener) {
 	if b.listeners == nil {
-		b.listeners = map[EventType][]Listener{}
+		b.listeners = map[EventType][]*commandListener{}
 	}
+
 	_, ok := b.listeners[et]
 	if !ok {
-		b.listeners[et] = []Listener{}
+		b.listeners[et] = []*commandListener{}
 	}
-	b.listeners[et] = append(b.listeners[et], l)
+
+	b.listeners[et] = append(
+		b.listeners[et],
+		&commandListener{Command: command, lis: lis},
+	)
 }
 
 //RemoveHandler removes the Handler associated with Command's type and returns it.
@@ -145,22 +160,57 @@ func (b *Bus) RemoveHandler(command Command) Handler {
 	return handler
 }
 
-//RemoveListener removes all Listeners that match l (via ==) and et.
+//RemoveListener removes all Listeners that match lis (via ==) and et.
 //The return value indicates if any Listeners were removed.
-func (b *Bus) RemoveListener(et EventType, l Listener) bool {
+func (b *Bus) RemoveListener(et EventType, lis Listener) bool {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	i, found := 0, false
-	for i < len(b.listeners[et]) {
-		if b.listeners[et][i] == l {
-			b.listeners[et] = append(b.listeners[et][:i], b.listeners[et][i+1:]...)
-			found = true
+	removed := b.removeListeners(
+		et,
+		func(_ Command, _lis Listener) bool {
+			return _lis == lis
+		},
+	)
+	return len(removed) > 0
+}
+
+//RemoveListenerCommand remove all Listeners that were registered with Command type
+//equal to command's and et.
+//It returns all removed Listeners.
+func (b *Bus) RemoveListenerCommand(et EventType, command Command) []Listener {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	return b.removeListeners(
+		et,
+		func(_command Command, _ Listener) bool {
+			return reflect.TypeOf(_command) == reflect.TypeOf(command)
+		},
+	)
+}
+
+func (b *Bus) removeListeners(et EventType, doRemove func(Command, Listener) bool) []Listener {
+	result := []Listener{}
+
+	i := 0
+	etComListeners := b.listeners[et]
+
+	for i < len(etComListeners) {
+		etCl := etComListeners[i]
+		if doRemove(etCl.Command, etCl.lis) {
+			etComListeners = append(etComListeners[:i], etComListeners[i+1:]...)
+			result = append(result, etCl.lis)
 		} else {
 			i++
 		}
 	}
-	return found
+
+	if b.listeners != nil {
+		b.listeners[et] = etComListeners
+	}
+
+	return result
 }
 
 //Execute is sugar for b.ExecuteContext(context.Background(), command).
@@ -227,7 +277,7 @@ func (b *Bus) dispatchEvent(ctx context.Context, et EventType, command Command, 
 	listeners := b.listeners[et]
 
 	for _, listener := range listeners {
-		listener.OnEvent(ctx, Event{
+		listener.onEvent(ctx, Event{
 			EventType: et,
 			Result:    result,
 			Err:       err,
